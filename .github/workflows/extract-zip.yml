@@ -1,0 +1,93 @@
+name: Clone and Extract Archives
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'extractions/**'
+
+permissions:
+  contents: write
+
+jobs:
+  clone-and-extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy extractions to clones
+        run: |
+          rm -rf clones
+          cp -a extractions clones
+
+      - name: Extract all ZIP archives recursively
+        run: |
+          python3 <<'PY'
+          import os
+          import zipfile
+          import shutil
+          from pathlib import Path
+
+          root = Path("clones").resolve()
+
+          def extract_archives(directory):
+              archives = sorted(directory.rglob("*.zip"))
+
+              for archive in archives:
+                  if not archive.is_file():
+                      continue
+
+                  destination = archive.with_suffix("")
+
+                  print(f"Extracting: {archive}")
+
+                  if destination.exists():
+                      raise FileExistsError(
+                          f"Extraction destination already exists: {destination}"
+                      )
+
+                  temp = destination.parent / (destination.name + ".tmp")
+
+                  try:
+                      temp.mkdir(parents=True)
+
+                      with zipfile.ZipFile(archive, "r") as z:
+                          for member in z.infolist():
+                              target = (temp / member.filename).resolve()
+
+                              if not target.is_relative_to(temp.resolve()):
+                                  raise ValueError(
+                                      f"Unsafe ZIP path: {member.filename}"
+                                  )
+
+                          z.extractall(temp)
+
+                      temp.rename(destination)
+                      archive.unlink()
+
+                      print(f"Created: {destination}")
+
+                  except Exception:
+                      shutil.rmtree(temp, ignore_errors=True)
+                      raise
+
+          extract_archives(root)
+
+          print("All ZIP archives extracted successfully.")
+          PY
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A clones
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Clone extractions and extract ZIP archives"
+            git push
+          fi
