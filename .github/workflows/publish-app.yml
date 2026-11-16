@@ -1,0 +1,62 @@
+```yaml
+name: Publish App Branch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - '.github/workflows/push-app.yml'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Publish app directory
+        run: |
+          # Create a temporary directory
+          mkdir -p /tmp/app-publish
+
+          # Copy all app contents, including hidden files
+          cp -a app/. /tmp/app-publish/
+
+          # Switch to app branch (create if it doesn't exist)
+          if git ls-remote --exit-code --heads origin app >/dev/null 2>&1; then
+            git switch --orphan temp-app
+            git branch -D app 2>/dev/null || true
+            git fetch origin app
+            git switch -c app FETCH_HEAD
+          else
+            git switch --orphan app
+          fi
+
+          # Replace branch contents with /app contents
+          git rm -rf . 2>/dev/null || true
+          cp -a /tmp/app-publish/. .
+
+          # Commit and push
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+            git commit -m "Sync app from main"
+            git push origin app
+          fi
+```
