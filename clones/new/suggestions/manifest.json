@@ -1,0 +1,15 @@
+{
+  "originalUrl": "https://claude.ai/new",
+  "title": "New chat - Claude",
+  "archiveTime": "2026-11-16T06:20:06.357Z",
+  "indexFilename": "index.html",
+  "resources": {
+    "fonts/0.woff2": "https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/c66fc489e-2VcCjn5t.woff2",
+    "fonts/1.woff2": "https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/c0f671921-CmibrCJp.woff2",
+    "fonts/2.woff2": "https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cb48c413e-yAna2Le1.woff2",
+    "stylesheet_0.css": "https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/c6a992d55-DI5HTLEc.css",
+    "stylesheet_1.css": "https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/shared-styles-DO3IFIBR.css",
+    "stylesheet_2.css": "https://assets-proxy.anthropic.com/claude-ai/v2/assets/v1/cf1a02a1a-DdTz_5PL.css",
+    "images/5.ico": "https://claude.ai/favicon.ico"
+  }
+}
