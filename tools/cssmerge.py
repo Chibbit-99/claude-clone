@@ -252,6 +252,16 @@ def declarations(body: str) -> tuple[str, ...]:
     return tuple(sorted(decls))
 
 
+def properties(body: str) -> list[tuple[str, str]]:
+    """Split a declaration block into (property, declaration) pairs."""
+    pairs: list[tuple[str, str]] = []
+    for decl in declarations(body):
+        name = decl.split(":", 1)[0].strip()
+        if name and not name.startswith("/*"):
+            pairs.append((name, decl))
+    return pairs
+
+
 def _is_at_leaf(head: str) -> bool:
     low = head.lower()
     return low.startswith(LEAF_AT) or low.startswith("@")
@@ -262,6 +272,8 @@ class Merger:
 
     def __init__(self, base_css: str):
         self.index: dict[tuple[tuple[str, ...], str], tuple[str, ...]] = {}
+        # selector -> properties it already sets (used for partial rules)
+        self.props: dict[tuple[tuple[str, ...], str], set[str]] = {}
         self.statements: set[tuple[tuple[str, ...], str]] = set()
         self.groups: list[tuple[tuple[str, ...], list[str]]] = []
         self._by_path: dict[tuple[str, ...], list[str]] = {}
@@ -289,12 +301,31 @@ class Merger:
                 self._push(path, rule)
             return
 
-        fingerprint = declarations(body)
-        fresh = [s for s in split_selectors(head) if (path, s) not in self.index]
-        for selector in split_selectors(head):
-            self.index.setdefault((path, selector), fingerprint)
-        if fresh and emit:
-            self._push(path, f"{','.join(fresh)}{{{body}}}")
+        selector_list = split_selectors(head)
+        pairs = properties(body)
+        fresh = [s for s in selector_list if (path, s) not in self.index]
+        # A rule whose selector is already in the base bundle still teaches us
+        # things the base page's own bundle left out: the theme variables that
+        # only the popover captures define, for instance.  Add the properties
+        # the base does not set for that selector (never override an existing
+        # one: the base page must keep rendering exactly like its capture).
+        partial: list[str] = []
+        for selector in selector_list:
+            known = self.props.setdefault((path, selector), set())
+            if (path, selector) not in self.index:
+                known.update(name for name, _ in pairs)
+                continue
+            extra = [decl for name, decl in pairs if name not in known]
+            if extra:
+                partial.append((selector, extra)) if isinstance(extra, list) else None
+                known.update(name for name, _ in pairs)
+        for selector in selector_list:
+            self.index.setdefault((path, selector), declarations(body))
+        if emit:
+            if fresh:
+                self._push(path, f"{','.join(fresh)}{{{body}}}")
+            for selector, extra in partial:
+                self._push(path, f"{selector}{{ {';'.join(extra)} }}".replace("{ ", "{").replace(" }", "}"))
 
     def _push(self, path: tuple[str, ...], rule: str) -> None:
         if path not in self._by_path:

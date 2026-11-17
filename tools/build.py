@@ -22,6 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import clonehtml as C  # noqa: E402
 import cssmerge  # noqa: E402
+import derived  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "app" / "new"
@@ -99,25 +100,28 @@ def strip_scripts(html: str) -> str:
     return html
 
 
-def class_coverage(page_html: str, css_text: str, frags) -> tuple[int, int, list[str]]:
-    """How many classes used by the injected fragments actually have a rule."""
-    def esc(cls: str) -> str:
-        return "".join(ch if (ch.isalnum() or ch in "-_") else "\\" + ch for ch in cls)
+def page_classes(markup: str) -> set[str]:
+    """Every class token used by a chunk of markup (both quoting styles)."""
+    from html import unescape
 
     used: set[str] = set()
-    for payload in frags:
-        payload = payload.replace("&amp;", "&")
-        for m in re.finditer(r'class="([^"]*)"', payload):
-            used.update(m.group(1).split())
-        for m in re.finditer(r'class=([^\s>"]+)', payload):
-            used.add(m.group(1))
-    used = {c for c in used if not c.startswith("sf-")}
+    for m in re.finditer(r'class="([^"]*)"', markup):
+        used.update(unescape(m.group(1)).split())
+    for m in re.finditer(r'class=([^\s>"]+)', markup):
+        used.add(unescape(m.group(1)))
+    return {c for c in used if not c.startswith("sf-")}
 
-    missing = [
-        c for c in sorted(used)
-        if not re.search(r"\." + re.escape(esc(c)) + r"(?=[{:,\s>~+.\[]|$)", css_text)
+
+def _escaped(cls: str) -> str:
+    return "".join(ch if (ch.isalnum() or ch in "-_") else "\\" + ch for ch in cls)
+
+
+def unstyled_classes(markup: str, css_text: str) -> list[str]:
+    """Classes used by the markup that no stylesheet has a rule for."""
+    return [
+        c for c in sorted(page_classes(markup))
+        if not re.search(r"\." + re.escape(_escaped(c)) + r"(?=[{:,\s>~+.\[)]|$)", css_text)
     ]
-    return len(used), len(used) - len(missing), missing
 
 
 def template(name: str, payload: str) -> str:
@@ -161,6 +165,7 @@ def main() -> None:
         merger.add(all_css(source))
     extra_css = merger.render()
 
+
     block = "".join(template(n, p) for n, p in frags)
     script = '<script src="app.js" defer></script>'
     if "</body>" in html:
@@ -169,6 +174,17 @@ def main() -> None:
         # SingleFile drops the trailing </body></html>; templates go at the end.
         html = html + block + script + "</body></html>"
 
+
+    # The captures never rendered some states (highlighted menu row, open trigger
+    # button, ...) so their utilities are in no bundle. Rebuild those from sibling
+    # rules that do exist, see tools/derived.py.
+    knowledge = derived.Knowledge()
+    for source in ["index"] + sorted({src for src, _ in PORTALS.values()} | {"suggestions", "workinginproject"}):
+        knowledge.learn(all_css(source))
+    inline_css = "\n".join(re.findall(r"<style\b[^>]*>(.*?)</style>", html, re.S))
+    shipped = "\n".join([inline_css, extra_css] + [(SRC / css).read_text() for css in STYLESHEETS])
+    derived_css, _skipped = derived.synthesize(unstyled_classes(html, shipped), knowledge)
+    extra_css = extra_css + "\n" + derived_css
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "index.html").write_text(html)
 
@@ -195,16 +211,18 @@ def main() -> None:
         [extra_css] + [(OUT / css).read_text() for css in STYLESHEETS]
         + re.findall(r"<style\b[^>]*>(.*?)</style>", html, re.S)
     )
-    total, styled, missing = class_coverage(html, shipped_css, [p for _n, p in frags])
+    sizes = {name: len(payload) for name, payload in frags}
+    missing = unstyled_classes(html, shipped_css)
+    all_classes = page_classes(html)
+    derived_count = derived_css.count("{") - derived_css.count("@layer") - derived_css.count("@media")
 
-    sizes = {n: len(p) for n, p in frags}
     print("wrote", (OUT / "index.html").relative_to(ROOT), f"{len(html):,} bytes",
           f"+ {EXTRA_CSS} ({len(extra_css):,} bytes)")
     print("fragments:", ", ".join(f"{n}({s:,})" for n, s in sizes.items()))
-    print(f"style coverage: {styled}/{total} fragment classes have a rule")
+    print(f"style coverage: {len(all_classes) - len(missing)}/{len(all_classes)} classes have a rule"
+          f" ({derived_count} utilities derived from the captures)")
     if missing:
-        print(f"  ({len(missing)} classes are not styled by any capture, e.g. "
-              + ", ".join(missing[:3]) + ")")
+        print(f"  {len(missing)} classes are not styled by the captures, e.g. " + ", ".join(missing[:3]))
 
 
 if __name__ == "__main__":
