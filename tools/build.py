@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import clonehtml as C  # noqa: E402
+import cssmerge  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "app" / "new"
@@ -42,6 +43,9 @@ PORTALS = {
 }
 
 STYLESHEETS = ("stylesheet_0.css", "stylesheet_1.css", "stylesheet_2.css")
+
+# extra rules the popup states needed but the base bundle does not contain
+EXTRA_CSS = "stylesheet_extra.css"
 
 
 def portals(name: str) -> list[str]:
@@ -75,11 +79,45 @@ def project_chip() -> str:
     raise SystemExit("workinginproject: project chip not found")
 
 
+def all_css(name: str) -> str:
+    """External + inline styles of one extraction, concatenated."""
+    folder = C.CLONES / name
+    parts = []
+    for css in STYLESHEETS:
+        path = folder / css
+        if path.exists():
+            parts.append(path.read_text())
+    for block in re.findall(r"<style\b[^>]*>(.*?)</style>", C.page(name), re.S):
+        parts.append(block)
+    return "\n".join(parts)
+
+
 def strip_scripts(html: str) -> str:
     html = re.sub(r"<script\b[^>]*>.*?</script>", "", html, flags=re.S)
     html = re.sub(r"<script\b[^>]*/?>", "", html)
     html = re.sub(r"<!--\s*Page saved with SingleFile.*?-->", "", html, flags=re.S)
     return html
+
+
+def class_coverage(page_html: str, css_text: str, frags) -> tuple[int, int, list[str]]:
+    """How many classes used by the injected fragments actually have a rule."""
+    def esc(cls: str) -> str:
+        return "".join(ch if (ch.isalnum() or ch in "-_") else "\\" + ch for ch in cls)
+
+    used: set[str] = set()
+    for payload in frags:
+        payload = payload.replace("&amp;", "&")
+        for m in re.finditer(r'class="([^"]*)"', payload):
+            used.update(m.group(1).split())
+        for m in re.finditer(r'class=([^\s>"]+)', payload):
+            used.add(m.group(1))
+    used = {c for c in used if not c.startswith("sf-")}
+
+    missing = [
+        c for c in sorted(used)
+        if not re.search(r"\." + re.escape(esc(c)) + r"(?=[{:,\s>~+.\[]|$)", css_text)
+    ]
+    return len(used), len(used) - len(missing), missing
 
 
 def template(name: str, payload: str) -> str:
@@ -104,6 +142,25 @@ def main() -> None:
     frags.append(("panel-suggestions", inline_panel("suggestions", 'class="absolute top-4 inset-x-3.5 z-10')))
     frags.append(("project-chip", project_chip()))
 
+    # the extra stylesheet is linked right after the bundles it extends
+    link = f'<link rel=stylesheet href="{EXTRA_CSS}">'
+    for css in ("stylesheet_0.css",):
+        needle = f"<link rel=stylesheet href={css} data-entry-stylesheet="
+        start = html.find(needle)
+        if start == -1:
+            raise SystemExit(f"cannot find stylesheet link for {css}")
+        end = html.find(">", start) + 1
+        html = html[:end] + link + html[end:]
+
+    # Merge in every rule the popup captures brought along, so the fragments
+    # we inject at runtime are styled exactly like their originals.
+    merger = cssmerge.Merger(all_css("index"))
+    panel_sources = {"suggestions", "workinginproject"}      # inline fragments
+    every = sorted({src for src, _ in PORTALS.values()} | panel_sources)
+    for source in every:
+        merger.add(all_css(source))
+    extra_css = merger.render()
+
     block = "".join(template(n, p) for n, p in frags)
     script = '<script src="app.js" defer></script>'
     if "</body>" in html:
@@ -117,6 +174,7 @@ def main() -> None:
 
     for css in STYLESHEETS:
         shutil.copyfile(SRC / css, OUT / css)
+    (OUT / EXTRA_CSS).write_text(extra_css)
 
     # assets: the base page plus every extraction a fragment came from
     sources = [SRC] + [C.CLONES / src for src, _ in PORTALS.values()]
@@ -133,9 +191,20 @@ def main() -> None:
                 if asset.is_file() and not (target / asset.name).exists():
                     shutil.copyfile(asset, target / asset.name)
 
+    shipped_css = "\n".join(
+        [extra_css] + [(OUT / css).read_text() for css in STYLESHEETS]
+        + re.findall(r"<style\b[^>]*>(.*?)</style>", html, re.S)
+    )
+    total, styled, missing = class_coverage(html, shipped_css, [p for _n, p in frags])
+
     sizes = {n: len(p) for n, p in frags}
-    print("wrote", (OUT / "index.html").relative_to(ROOT), f"{len(html):,} bytes")
+    print("wrote", (OUT / "index.html").relative_to(ROOT), f"{len(html):,} bytes",
+          f"+ {EXTRA_CSS} ({len(extra_css):,} bytes)")
     print("fragments:", ", ".join(f"{n}({s:,})" for n, s in sizes.items()))
+    print(f"style coverage: {styled}/{total} fragment classes have a rule")
+    if missing:
+        print(f"  ({len(missing)} classes are not styled by any capture, e.g. "
+              + ", ".join(missing[:3]) + ")")
 
 
 if __name__ == "__main__":
