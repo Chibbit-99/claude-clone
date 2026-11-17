@@ -196,20 +196,33 @@ def main() -> None:
         shutil.copyfile(SRC / css, OUT / css)
     (OUT / EXTRA_CSS).write_text(extra_css)
 
-    # assets: the base page plus every extraction a fragment came from
+    # assets: only the files the built document actually references, taken from
+    # the base capture or from whichever extraction a fragment came from
+    document = "\n".join([html, extra_css] + [
+        (OUT / css).read_text() for css in STYLESHEETS if (OUT / css).exists()
+    ])
     sources = [SRC] + [C.CLONES / src for src, _ in PORTALS.values()]
     for sub in ("fonts", "images"):
         target = OUT / sub
         if target.exists():
             shutil.rmtree(target)
         target.mkdir(parents=True)
+        copied: list[str] = []
+        unused: list[str] = []
         for source in sources:
             folder = source / sub
             if not folder.is_dir():
                 continue
             for asset in sorted(folder.iterdir()):
-                if asset.is_file() and not (target / asset.name).exists():
-                    shutil.copyfile(asset, target / asset.name)
+                if not asset.is_file() or (target / asset.name).exists():
+                    continue
+                if f"{sub}/{asset.name}" not in document:
+                    unused.append(asset.name)
+                    continue
+                shutil.copyfile(asset, target / asset.name)
+                copied.append(asset.name)
+        note = f", skipped unreferenced {'/'.join(sorted(set(unused)))}" if unused else ""
+        print(f"assets/{sub}: {len(copied)} copied{note}")
 
     shipped_css = "\n".join(
         [extra_css] + [(OUT / css).read_text() for css in STYLESHEETS]
