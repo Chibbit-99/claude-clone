@@ -1,1 +1,348 @@
-This is a placeholder for reconstruction of new chat page
+<!DOCTYPE html>
+<!--
+  Reconstruction of https://claude.ai/new
+  Reference extraction: clones/new/index (see /clones/INFO.md)
+  Styles are split into:
+    styles/critical.css  – static critical CSS captured from the real page (design tokens)
+    styles/base.css      – full component stylesheet captured from the real page
+    styles/frame.css     – dframe (sidebar/pane) variables captured from the real page
+    styles/app.css       – hand-written layout for this reconstruction
+-->
+<html
+  lang="en-US"
+  data-theme="claude"
+  data-mode="dark"
+  data-density="comfortable"
+  class="cds-root h-screen antialiased"
+  data-sidebar-chrome="rail"
+  data-sidebar-width="288"
+  style="--static-sidebar-width: 288px"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>New chat - Claude</title>
+    <link rel="icon" href="assets/favicon.ico" sizes="any" />
+    <style>
+      html.cds-root {
+        --cds-page-bg: var(--cds-surface-1);
+      }
+    </style>
+    <link rel="stylesheet" href="styles/critical.css" />
+    <link rel="stylesheet" href="styles/frame.css" />
+    <link rel="stylesheet" href="styles/base.css" />
+    <link rel="stylesheet" href="styles/app.css" />
+    <style data-fizzy-lake-page-background>
+      :where(html:not([data-cds-theme])).cds-root[data-cds-fizzy-lake~="color"] {
+        --cds-surface-1: #ffffff;
+      }
+      @media screen {
+        :where(html:not([data-cds-theme])).cds-root[data-cds-fizzy-lake~="color"][data-mode="dark"] {
+          --cds-surface-1: #191919;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-surface-1 text-primary font-sans min-h-screen chat-ui-core">
+    <div id="root">
+      <div
+        class="cds-root text-primary contents"
+        data-density="comfortable"
+        data-mode="dark"
+        data-platform="web"
+        data-font="anthropic"
+        data-cds-fizzy-lake="color panels type"
+        data-page-bg="surface-1"
+        style="font-size: var(--cds-font-size-body); --cds-page-bg: var(--cds-surface-1)"
+      >
+        <div class="app">
+          <h1 class="sr-only">Claude</h1>
+
+          <!-- ============================ sidebar ============================ -->
+          <aside class="sidebar" aria-label="Sidebar">
+            <div class="sidebar-titlebar">
+              <div class="titlebar-home">
+                <button type="button" class="icon-btn" aria-label="Hide sidebar" aria-keyshortcuts="Control+b">
+                  <span data-cds="Icon" aria-hidden="true">&#xe0dd;</span>
+                </button>
+              </div>
+              <div class="titlebar-brand-col">
+                <a href="#" data-sidebar-home-link>
+                  <div data-cds="ProductLogo" data-app-wordmark="claude">
+                    <span class="wordmark">Claude</span>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            <div class="sidebar-body" id="frame-peek-popover" data-testid="sidebar">
+              <h2 class="sr-only">Navigation</h2>
+
+              <nav class="nav-scroll" data-scroll-container aria-label="Main">
+                <div class="nav-primary">
+                  <a href="#" class="row is-active" data-row aria-current="page">
+                    <span class="row-leading"><span data-cds="Icon" aria-hidden="true">&#xe001;</span></span>
+                    <span class="row-label"><span>New</span></span>
+                    <span class="row-trailing">
+                      <span class="shortcut" aria-hidden="true">
+                        <kbd>Ctrl</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>O</kbd>
+                      </span>
+                    </span>
+                  </a>
+
+                  <button type="button" class="row" data-row>
+                    <span class="row-leading"><span data-cds="Icon" aria-hidden="true">&#xe0d3;</span></span>
+                    <span class="row-label"><span>Search</span></span>
+                    <span class="row-trailing">
+                      <span class="shortcut" aria-hidden="true">
+                        <kbd>Ctrl</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>K</kbd>
+                      </span>
+                    </span>
+                  </button>
+
+                  <div class="spacer-4" aria-hidden="true"></div>
+                </div>
+
+                <div class="pin-group">
+                  <div class="row-wrap">
+                    <a href="#" class="row" data-row>
+                      <span class="row-leading"><span data-cds="Icon" aria-hidden="true">&#xe0c9;</span></span>
+                      <span class="row-label"><span>Projects</span></span>
+                    </a>
+                    <div class="row-controls">
+                      <button type="button" class="icon-btn" aria-label="Create project">
+                        <span data-cds="Icon" aria-hidden="true">&#xe001;</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <a href="#" class="row" data-row>
+                    <span class="row-leading"><span data-cds="Icon" aria-hidden="true">&#xe017;</span></span>
+                    <span class="row-label"><span>Artifacts</span></span>
+                  </a>
+
+                  <a href="#" class="row" data-row>
+                    <span class="row-leading"><span data-cds="Icon" aria-hidden="true">&#xe048;</span></span>
+                    <span class="row-label">
+                      <span>Code</span>
+                      <span class="badge-upgrade">Upgrade</span>
+                    </span>
+                  </a>
+
+                  <a href="#" class="row" data-row>
+                    <span class="row-leading"><span data-cds="Icon" aria-hidden="true">&#xe100;</span></span>
+                    <span class="row-label"><span>Customize</span></span>
+                  </a>
+
+                  <div class="spacer-12" aria-hidden="true"></div>
+                </div>
+
+                <!-- pinned ------------------------------------------------- -->
+                <section class="sidebar-section pinned-section">
+                  <div class="group-label">
+                    <h3>
+                      <button type="button" class="group-toggle" data-group-toggle aria-expanded="true">
+                        <span class="group-name">Pinned</span>
+                        <span class="group-caret" data-cds="Icon" aria-hidden="true">&#xf003;</span>
+                      </button>
+                    </h3>
+                  </div>
+                  <div class="drag-hint" aria-hidden="true">
+                    <span class="drag-hint-leading"><span data-cds="Icon">&#xe0bd;</span></span>
+                    <span>Drag to pin</span>
+                  </div>
+                </section>
+
+                <!-- recents ------------------------------------------------ -->
+                <section class="sidebar-section recents" data-testid="sidebar-recents">
+                  <div class="group-label">
+                    <h3>
+                      <button type="button" class="group-toggle" data-group-toggle aria-expanded="true">
+                        <span class="group-name">Chats and tasks</span>
+                        <span class="group-caret" data-cds="Icon" aria-hidden="true">&#xf003;</span>
+                      </button>
+                    </h3>
+                    <div class="group-action">
+                      <button type="button" class="icon-btn" aria-label="Group and sort">
+                        <span data-cds="Icon" aria-hidden="true">&#xf0b6;</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div id="chat-list"></div>
+
+                  <button type="button" class="view-all-row">View all</button>
+                </section>
+              </nav>
+
+              <!-- footer ------------------------------------------------ -->
+              <div class="sidebar-bottom">
+                <div class="sidebar-footer">
+                  <div class="sidebar-footer-inner">
+                  <button type="button" class="user-menu" data-testid="user-menu-button" aria-expanded="false">
+                    <span class="avatar-slot"><span class="avatar" role="img" aria-label="Chibbit">C</span></span>
+                    <span class="user-menu-words">
+                      <span class="user-menu-name">Chibbit</span>
+                      <span class="user-menu-suffix">·</span>
+                      <span class="user-menu-suffix">Free</span>
+                    </span>
+                    <span class="user-menu-caret">
+                      <span data-cds="Icon" aria-hidden="true">&#xf003;</span>
+                    </span>
+                  </button>
+
+                  <div class="footer-aux">
+                    <a href="#" class="btn-ghost" aria-label="Use on desktop">
+                      <span data-cds="Icon" aria-hidden="true">&#xe0cc;</span>
+                    </a>
+                  </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="resize-handle" role="separator" aria-label="Resize sidebar"></div>
+          </aside>
+
+          <!-- ============================= main ============================= -->
+          <main class="main">
+            <header class="pane-header">
+              <div class="header-actions">
+                <button type="button" class="btn-ghost" aria-label="Use incognito">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <g fill="currentColor">
+                      <circle cx="7.5" cy="10" r="0.375"></circle>
+                      <circle cx="12.5" cy="10" r="0.375"></circle>
+                    </g>
+                    <path d="M10 3.625C6.479 3.625 3.625 6.479 3.625 10v4.25c0 1.174.951 2.125 2.125 2.125.447 0 1.679-1.5 2.125-1.5.446 0 1.679 1.5 2.125 1.5.446 0 1.679-1.5 2.125-1.5.446 0 1.679 1.5 2.125 1.5 1.174 0 2.125-.951 2.125-2.125v-4.25c0-3.521-2.854-6.375-6.375-6.375Z"></path>
+                  </svg>
+                </button>
+              </div>
+            </header>
+
+            <div class="pane-scroller">
+              <div class="plan-strip">
+                <div class="plan-pill">
+                  Free plan
+                  <div class="plan-pill-dot" aria-hidden="true"></div>
+                  <span><a data-cds="TextLink" href="#">Upgrade</a></span>
+                </div>
+              </div>
+
+              <h2 class="sr-only">New chat</h2>
+
+              <div class="new-page">
+                <div class="greeting-wrap">
+                  <div class="greeting">
+                    <h3 class="greeting-text">
+                      <span class="greeting-spark" data-new-page-greeting-spark aria-hidden="true">
+                        <svg data-cds="Spark" viewBox="0 0 100 100" fill="var(--cds-clay, #d97757)" aria-hidden="true">
+                          <path d="m19.6 66.5 19.7-11 .3-1-.3-.5h-1l-3.3-.2-11.2-.3L14 53l-9.5-.5-2.4-.5L0 49l.2-1.5 2-1.3 2.9.2 6.3.5 9.5.6 6.9.4L38 49.1h1.6l.2-.7-.5-.4-.4-.4L29 41l-10.6-7-5.6-4.1-3-2-1.5-2-.6-4.2 2.7-3 3.7.3.9.2 3.7 2.9 8 6.1L37 36l1.5 1.2.6-.4.1-.3-.7-1.1L33 25l-6-10.4-2.7-4.3-.7-2.6c-.3-1-.4-2-.4-3l3-4.2L28 0l4.2.6L33.8 2l2.6 6 4.1 9.3L47 29.9l2 3.8 1 3.4.3 1h.7v-.5l.5-7.2 1-8.7 1-11.2.3-3.2 1.6-3.8 3-2L61 2.6l2 2.9-.3 1.8-1.1 7.7L59 27.1l-1.5 8.2h.9l1-1.1 4.1-5.4 6.9-8.6 3-3.5L77 13l2.3-1.8h4.3l3.1 4.7-1.4 4.9-4.4 5.6-3.7 4.7-5.3 7.1-3.2 5.7.3.4h.7l12-2.6 6.4-1.1 7.6-1.3 3.5 1.6.4 1.6-1.4 3.4-8.2 2-9.6 2-14.3 3.3-.2.1.2.3 6.4.6 2.8.2h6.8l12.6 1 3.3 2 1.9 2.7-.3 2-5.1 2.6-6.8-1.6-16-3.8-5.4-1.3h-.8v.4l4.6 4.5 8.3 7.5L89 80.1l.5 2.4-1.3 2-1.4-.2-9.2-7-3.6-3-8-6.8h-.5v.7l1.8 2.7 9.8 14.7.5 4.5-.7 1.4-2.6 1-2.7-.6-5.8-8-6-9-4.7-8.2-.5.4-2.9 30.2-1.3 1.5-3 1.2-2.5-2-1.4-3 1.4-6.2 1.6-8 1.3-6.4 1.2-7.9.7-2.6v-.2H49L43 72l-9 12.3-7.2 7.6-1.7.7-3-1.5.3-2.8L24 86l10-12.8 6-7.9 4-4.6-.1-.5h-.3L17.2 77.4l-4.7.6-2-2 .2-3 1-1 8-5.5Z"></path>
+                        </svg>
+                      </span>
+                      <span class="greeting-name">Let&rsquo;s noodle</span>
+                    </h3>
+                  </div>
+                </div>
+
+                <!-- composer -->
+                <div class="composer-zone">
+                  <div class="composer is-empty" data-cds="ChatComposer" id="composer">
+                    <div class="composer-box">
+                      <div class="composer-editor-area">
+                        <div class="composer-editor-wrap">
+                          <div
+                            class="composer-editor"
+                            id="composer-editor"
+                            role="textbox"
+                            aria-label="Write your prompt to Claude"
+                            contenteditable="true"
+                            spellcheck="true"
+                            data-testid="chat-input"
+                          ></div>
+                          <span class="composer-placeholder" id="composer-placeholder">How can I help you today?</span>
+                        </div>
+
+                        <div class="composer-actions" data-cds="ChatComposerActions">
+                          <div class="composer-left">
+                            <button type="button" class="composer-icon-btn" data-testid="chat-input-attach" aria-label="Add files, connectors, and more" aria-expanded="false" id="add-button">
+                              <span data-cds="Icon" aria-hidden="true">&#xe001;</span>
+                            </button>
+
+                            <div class="segmented" role="radiogroup" aria-label="Surface" data-cds="SegmentedControl" id="surface-switch">
+                              <div class="segmented-indicator" style="width: 52px; transform: translateX(0)"></div>
+                              <button type="button" class="segmented-option" role="radio" aria-checked="true" data-value="chat">Chat</button>
+                              <button type="button" class="segmented-option" role="radio" aria-checked="false" data-value="cowork">Cowork</button>
+                            </div>
+                          </div>
+
+                          <div class="composer-right">
+                            <div class="composer-right-inner">
+                              <button type="button" class="model-selector" data-testid="model-selector-dropdown" aria-label="Model: Haiku 5.5 Low" aria-expanded="false" id="model-button">
+                                <span class="model-selector-name">
+                                  <span>Haiku 5.5</span>
+                                  <span class="model-effort">Low </span>
+                                </span>
+                              </button>
+
+                              <div class="dictate-group" data-testid="composer-dictate">
+                                <div class="dictate-split" role="group" aria-label="Dictate">
+                                  <button type="button" class="composer-icon-btn" aria-label="Dictate">
+                                    <span data-cds="Icon" aria-hidden="true">&#xe0ab;</span>
+                                  </button>
+                                  <span class="dictate-divider" aria-hidden="true"></span>
+                                  <button type="button" class="dictate-mic" aria-label="Microphone" aria-expanded="false">
+                                    <span data-cds="Icon" aria-hidden="true">&#xf003;</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div class="send-slot">
+                                <button type="button" class="voice-btn" aria-label="Use voice mode">
+                                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" aria-hidden="true">
+                                    <g>
+                                      <line x1="3.625" y1="9.62" x2="3.625" y2="10.38"></line>
+                                      <line x1="6.812" y1="7.62" x2="6.812" y2="12.38"></line>
+                                      <line x1="10" y1="3.62" x2="10" y2="16.38"></line>
+                                      <line x1="13.188" y1="7.62" x2="13.188" y2="12.38"></line>
+                                      <line x1="16.375" y1="9.62" x2="16.375" y2="10.38"></line>
+                                    </g>
+                                  </svg>
+                                </button>
+
+                                <button type="button" class="send-btn" data-testid="chat-input-send" aria-label="Send message">
+                                  <span data-cds="Icon" aria-hidden="true">&#xe013;</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- prompt category chips -->
+                <div class="chips-zone">
+                  <ul class="chips" aria-label="Prompt categories">
+                    <li><button type="button" class="chip"><span class="chip-icon-wrap"><span data-cds="Icon" aria-hidden="true">&#xe064;</span></span><span class="chip-label">Write</span></button></li>
+                    <li><button type="button" class="chip"><span class="chip-icon-wrap"><span data-cds="Icon" aria-hidden="true">&#xe083;</span></span><span class="chip-label">Learn</span></button></li>
+                    <li><button type="button" class="chip"><span class="chip-icon-wrap"><span data-cds="Icon" aria-hidden="true">&#xe048;</span></span><span class="chip-label">Code</span></button></li>
+                    <li><button type="button" class="chip"><span class="chip-icon-wrap"><span data-cds="Icon" aria-hidden="true">&#xe04c;</span></span><span class="chip-label">Life stuff</span></button></li>
+                    <li><button type="button" class="chip"><span class="chip-icon-wrap"><span data-cds="Icon" aria-hidden="true">&#xe097;</span></span><span class="chip-label">Claude&rsquo;s choice</span></button></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div id="portal-root"></div>
+    <input type="file" id="file-input" multiple hidden />
+
+    <script src="scripts/data.js"></script>
+    <script src="scripts/app.js"></script>
+  </body>
+</html>
