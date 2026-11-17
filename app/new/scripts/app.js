@@ -161,10 +161,119 @@
       const { shell, anchor, onPointerDown, onKeyDown } = this.open;
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
+      Submenus.hideAll();
       shell.remove();
       document.body.classList.remove("is-suggesting");
       if (anchor.setAttribute) anchor.setAttribute("aria-expanded", "false");
       this.open = null;
+    }
+  };
+
+  /* ------------------------------------------------------- submenu manager
+     One shared controller for every hover submenu. Each open menu registers
+     its submenus here; opening one closes any other, and a single close timer
+     owns the hide logic so nothing is left on screen after the pointer leaves. */
+  const Submenus = {
+    items: [],
+    current: null,
+    timer: 0,
+    reset() {
+      clearTimeout(this.timer);
+      this.items.forEach((it) => {
+        if (it.panel && it.panel.parentNode) it.panel.remove();
+        if (it.row) {
+          it.row.removeAttribute("data-submenu-open");
+          it.row.setAttribute("aria-expanded", "false");
+        }
+        it.panel = null;
+      });
+      this.items = [];
+      this.current = null;
+    },
+    /* remove any open panels but keep the registrations (used on close, so a
+       menu that finishes building afterwards is not left unregistered) */
+    hideAll() {
+      clearTimeout(this.timer);
+      this.items.forEach((it) => {
+        if (it.panel && it.panel.parentNode) it.panel.remove();
+        it.panel = null;
+        if (it.row) {
+          it.row.removeAttribute("data-submenu-open");
+          it.row.setAttribute("aria-expanded", "false");
+        }
+      });
+      this.current = null;
+    },
+    register(row, build) {
+      const item = { row, build, panel: null };
+      this.items.push(item);
+      row.addEventListener("mouseenter", () => {
+        clearTimeout(this.timer);
+        this.show(item);
+      });
+      row.addEventListener("mouseleave", () => this.schedule(140));
+      return item;
+    },
+    /* dismiss immediately when the pointer enters a plain sibling row */
+    watchSiblings(menuRoot) {
+      const self = this;
+      $$(".menu-item, .model-nav-row", menuRoot).forEach((row) => {
+        row.addEventListener("mouseenter", () => {
+          const isTrigger = self.items.some((it) => it.row === row);
+          if (isTrigger) return;
+          if (!self.current) return;
+          self.schedule(80);
+        });
+      });
+    },
+    show(item) {
+      if (this.current === item && item.panel) return;
+      /* only one submenu at a time */
+      this.items.forEach((it) => {
+        if (it === item) return;
+        if (it.panel && it.panel.parentNode) it.panel.remove();
+        it.panel = null;
+        it.row.removeAttribute("data-submenu-open");
+        it.row.setAttribute("aria-expanded", "false");
+      });
+      if (!item.panel) {
+        item.panel = item.build();
+        item.panel.classList.add("menu--submenu");
+        item.panel.style.position = "absolute";
+        item.panel.style.pointerEvents = "auto";
+        $(".portal-shell")?.appendChild(item.panel) ||
+          $("#portal-root").firstChild.appendChild(item.panel);
+        item.panel.addEventListener("mouseenter", () => clearTimeout(this.timer));
+        item.panel.addEventListener("mouseleave", () => this.schedule(140));
+      }
+      /* anchor: right of the row, top-aligned but kept inside the viewport */
+      const r = item.row.getBoundingClientRect();
+      const m = item.panel.getBoundingClientRect();
+      let left = r.right + 8;
+      if (left + m.width > window.innerWidth - 8) left = Math.max(8, r.left - 8 - m.width);
+      let top = r.top;
+      if (top + m.height > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - m.height);
+      item.panel.style.left = left + "px";
+      item.panel.style.top = top + "px";
+      item.row.setAttribute("data-submenu-open", "true");
+      item.row.setAttribute("aria-expanded", "true");
+      this.current = item;
+    },
+    schedule(delay) {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => {
+        const hovering = this.items.some(
+          (it) => it.row.matches(":hover") || (it.panel && it.panel.matches(":hover"))
+        );
+        if (hovering) return;
+        this.items.forEach((it) => {
+          if (it.panel && it.panel.parentNode) it.panel.remove();
+          it.panel = null;
+          it.row.removeAttribute("data-submenu-open");
+          it.row.setAttribute("aria-expanded", "false");
+        });
+        this.current = null;
+      }, delay === undefined ? 140 : delay);
     }
   };
 
@@ -228,6 +337,7 @@
   addButton.addEventListener("click", (e) => {
     e.stopPropagation();
     if (Menus.open && Menus.open.anchor === addButton) return Menus.close();
+    Submenus.reset();
 
     const items = [
       menuRow({ label: "Upload or add files", icon: "\ue019", shortcut: ["Ctrl", "+", "U"], testid: "add-menu-upload-file", onClick: () => $("#file-input").click() }),
@@ -242,60 +352,56 @@
       menuRow({ label: "Web search", icon: "\ue082", checked: true, testid: "add-menu-web-search" })
     ];
     const menu = buildMenu(items);
+    menu.classList.add("menu--add");
 
-    /* hover submenus: project / connectors / skills */
+    /* hover submenus: project / connectors / skills / design system */
     const submenuMap = {
-      "Add to project": [
-        { label: "Browse projects", icon: "\ue0c9" },
-        { label: "New project", icon: "\ue001" }
-      ],
-      "Add connector": [
-        { label: "Browse connectors", icon: "\ue096" },
-        { label: "Add custom connector", icon: "\ue061" }
-      ],
-      Skills: [
-        { label: "Create skill", icon: "\ue001" },
-        { label: "Manage skills", icon: "\ue100" }
-      ],
-      "Design system": [{ label: "Browse design systems", icon: "\ue0b8" }]
+      "Add to project": {
+        width: 292,
+        items: [
+          { label: "New project", icon: "\ue001" },
+          { label: "SC Drawer", icon: "\ue0c9" },
+          { label: "Chibbit", icon: "\ue0c9" }
+        ]
+      },
+      Skills: {
+        width: 184,
+        items: [
+          { label: "google-workspace", icon: "\ue0d2" },
+          { label: "import-memory", icon: "\ue0d2" },
+          { label: "morning", icon: "\ue0d2" },
+          { label: "skill-creator", icon: "\ue0d2" }
+        ]
+      },
+      "Add connector": {
+        width: 211,
+        items: [
+          { label: "Browse connectors", icon: "\ue055" },
+          { label: "Add custom connector", icon: "\ue061" }
+        ]
+      },
+      "Design system": {
+        width: 211,
+        items: [{ label: "Browse design systems", icon: "\ue0b8" }]
+      }
     };
 
     $$(".menu-item", menu).forEach((row) => {
-      const label = $(".menu-item-text", row).textContent;
-      const sub = submenuMap[label];
-      if (!sub) return;
-      let subEl = null;
-      row.addEventListener("mouseenter", () => {
-        if (subEl) return;
-        const subMenu = buildMenu(sub.map((s) => menuRow({ label: s.label, icon: s.icon })));
-        subMenu.classList.add("menu--submenu");
-        const r = row.getBoundingClientRect();
-        $("#portal-root").firstChild.appendChild(subMenu);
-        subMenu.style.position = "absolute";
-        subMenu.style.top = r.top + "px";
-        subMenu.style.left = r.right + 4 + "px";
-        subMenu.style.pointerEvents = "auto";
-        subEl = subMenu;
-        row.setAttribute("data-submenu-open", "true");
-      });
-      row.addEventListener("mouseleave", () => {
-        if (!subEl) return;
-        setTimeout(() => {
-          if (subEl && !subEl.matches(":hover") && !row.matches(":hover")) {
-            subEl.remove();
-            subEl = null;
-            row.removeAttribute("data-submenu-open");
-          }
-        }, 120);
-      });
-      if (subEl) subEl.addEventListener("mouseleave", () => {
-        subEl.remove();
-        subEl = null;
-        row.removeAttribute("data-submenu-open");
+      const textEl = $(".menu-item-text", row);
+      if (!textEl) return;
+      const spec = submenuMap[textEl.textContent.trim()];
+      if (!spec) return;
+      Submenus.register(row, () => {
+        const subMenu = buildMenu(
+          spec.items.map((it) => menuRow({ label: it.label, icon: it.icon }))
+        );
+        subMenu.style.width = spec.width + "px";
+        return subMenu;
       });
     });
 
-    Menus.openMenu(addButton, menu, { offset: 17 });
+    Submenus.watchSiblings(menu);
+    Menus.openMenu(addButton, menu, { offset: -7 });
   });
 
   /* ------------------------------------------------------------- model menu */
@@ -303,6 +409,7 @@
   modelButton.addEventListener("click", (e) => {
     e.stopPropagation();
     if (Menus.open && Menus.open.anchor === modelButton) return Menus.close();
+    Submenus.reset();
 
     const rows = data.models.map((m) => {
       const row = el("button", "model-row");
@@ -354,12 +461,23 @@
 
     const effortRow = el("button", "model-nav-row");
     effortRow.type = "button";
-    effortRow.innerHTML = '<span>Effort</span><span class="model-nav-value">Low' + '</span>';
+    effortRow.setAttribute("aria-haspopup", "menu");
+    effortRow.setAttribute("aria-expanded", "false");
+    const effortLabel = el("span");
+    effortLabel.textContent = "Effort";
+    const effortValue = el("span", "model-nav-value");
+    effortValue.textContent = data.effort || "Low";
+    effortRow.appendChild(effortLabel);
+    effortRow.appendChild(effortValue);
     effortRow.appendChild(icon("\ue02a", "calc(1rem * var(--cds-rem-scale, 1))"));
 
     const moreRow = el("button", "model-nav-row");
     moreRow.type = "button";
-    moreRow.innerHTML = '<span>More models</span>';
+    moreRow.setAttribute("aria-haspopup", "menu");
+    moreRow.setAttribute("aria-expanded", "false");
+    const moreLabel = el("span");
+    moreLabel.textContent = "More models";
+    moreRow.appendChild(moreLabel);
     moreRow.appendChild(icon("\ue02a", "calc(1rem * var(--cds-rem-scale, 1))"));
 
     const footer = el("div", "model-footer");
@@ -371,17 +489,137 @@
     menu.setAttribute("role", "menu");
     const sheet = el("div", "menu-sheet");
     rows.forEach((r) => sheet.appendChild(r));
-    const sep1 = menuSeparator();
-    sheet.appendChild(sep1);
+    sheet.appendChild(menuSeparator());
     sheet.appendChild(effortRow);
-    const sepMid = menuSeparator();
-    sheet.appendChild(sepMid);
+    sheet.appendChild(menuSeparator());
     sheet.appendChild(moreRow);
-    const sep2 = menuSeparator();
-    sheet.appendChild(sep2);
+    sheet.appendChild(menuSeparator());
     sheet.appendChild(footer);
     menu.appendChild(sheet);
 
+    /* --- effort submenu (320px) ---------------------------------------- */
+    const EFFORT_LEVELS = ["Low", "Medium", "High", "Extra", "Max"];
+    const buildEffortMenu = () => {
+      const panel = el("div", "menu menu--effort");
+      panel.setAttribute("role", "menu");
+      panel.setAttribute("aria-label", "Effort");
+      const body = el("div", "menu-sheet");
+      const note = el("p", "effort-note");
+      note.textContent =
+        "Higher effort means more thorough responses, but takes longer and uses your limits faster.";
+      body.appendChild(note);
+
+      const group = el("div", "effort-group");
+      group.setAttribute("role", "group");
+      EFFORT_LEVELS.forEach((level) => {
+        const item = el("button", "menu-item effort-item");
+        item.type = "button";
+        item.setAttribute("role", "menuitemradio");
+        item.setAttribute("aria-checked", level === (data.effort || "Low") ? "true" : "false");
+        const text = el("span", "effort-item-label");
+        text.textContent = level;
+        item.appendChild(text);
+        if (level === "Medium") {
+          const badge = el("span", "effort-badge");
+          badge.textContent = "Recommended";
+          item.appendChild(badge);
+        }
+        if (level === "Max") {
+          const badge = el("span", "effort-badge effort-badge--warn");
+          const warn = el("span", "effort-badge-icon");
+          warn.setAttribute("aria-hidden", "true");
+          warn.textContent = "\u26a0\ufe0e";
+          badge.appendChild(warn);
+          const t = el("span");
+          t.textContent = "8\u00d7 or more usage";
+          badge.appendChild(t);
+          item.appendChild(badge);
+        }
+        if (level === (data.effort || "Low")) {
+          const check = el("span", "effort-check");
+          check.appendChild(icon("\ue03b", "calc(1.25rem * var(--cds-rem-scale, 1))"));
+          item.appendChild(check);
+        }
+        item.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          data.effort = level;
+          effortValue.textContent = level;
+          const live = $(".model-effort");
+          if (live) live.textContent = level;
+          modelButton.setAttribute(
+            "aria-label",
+            "Effort: " + level
+          );
+          Menus.close();
+        });
+        group.appendChild(item);
+      });
+      body.appendChild(group);
+      panel.appendChild(body);
+      return panel;
+    };
+
+    /* --- more models submenu (278px) ------------------------------------ */
+    const MORE_MODELS = [
+      { name: "Fable 5.1", note: "Pro, Max, or Ultra", upgrade: true },
+      { name: "Fable 5", note: "Pro, Max, or Ultra", upgrade: true },
+      { name: "Opus 5", badge: "Pro", upgrade: true },
+      { name: "Opus 4.8", badge: "Pro", upgrade: true },
+      { name: "Opus 4.7", badge: "Pro", upgrade: true },
+      { name: "Opus 4.6", badge: "Pro", upgrade: true },
+      { name: "Opus 3", badge: "Pro", upgrade: true },
+      { name: "Sonnet 5" },
+      { name: "Sonnet 4.6" }
+    ];
+    const buildMoreModels = () => {
+      const panel = el("div", "menu menu--more-models");
+      panel.setAttribute("role", "menu");
+      panel.setAttribute("aria-label", "More models");
+      const body = el("div", "menu-sheet");
+      const group = el("div", "more-models-group");
+      group.setAttribute("role", "group");
+      MORE_MODELS.forEach((m) => {
+        const item = el("button", "menu-item more-model-item");
+        item.type = "button";
+        item.setAttribute("role", "menuitem");
+        const name = el("span", "more-model-name");
+        name.textContent = m.name;
+        item.appendChild(name);
+        if (m.note) {
+          const info = el("span", "more-model-info");
+          info.appendChild(icon("\ue08f", "calc(0.75rem * var(--cds-rem-scale, 1))"));
+          const t = el("span", "more-model-note");
+          t.textContent = m.note;
+          info.appendChild(t);
+          item.appendChild(info);
+        }
+        if (m.badge) {
+          const badge = el("span", "more-model-badge");
+          badge.textContent = m.badge;
+          item.appendChild(badge);
+        }
+        if (m.upgrade) {
+          const up = el("span", "more-model-upgrade");
+          up.textContent = "Upgrade";
+          item.appendChild(up);
+        }
+        item.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          $(".model-selector-name > span:first-child").textContent = m.name;
+          modelButton.setAttribute("aria-label", "Model: " + m.name);
+          Menus.close();
+        });
+        group.appendChild(item);
+      });
+      body.appendChild(group);
+      panel.appendChild(body);
+      return panel;
+    };
+
+    Submenus.register(effortRow, buildEffortMenu);
+    Submenus.register(moreRow, buildMoreModels);
+
+    Submenus.watchSiblings(menu);
     Menus.openMenu(modelButton, menu, { offset: -7, alignEnd: true, nudgeX: 8, ignoreClamp: true });
   });
 
