@@ -15,6 +15,7 @@ Run: python3 tools/build.py
 from __future__ import annotations
 
 import re
+import hashlib
 import shutil
 import sys
 from pathlib import Path
@@ -147,7 +148,8 @@ def main() -> None:
     frags.append(("project-chip", project_chip()))
 
     # the extra stylesheet is linked right after the bundles it extends
-    link = f'<link rel=stylesheet href="{EXTRA_CSS}">'
+    # cache-busting placeholder, filled in once the delta is generated
+    link = f'<link rel=stylesheet href="{EXTRA_CSS}?v=EXTRAHASH">'
     for css in ("stylesheet_0.css",):
         needle = f"<link rel=stylesheet href={css} data-entry-stylesheet="
         start = html.find(needle)
@@ -164,10 +166,11 @@ def main() -> None:
     for source in every:
         merger.add(all_css(source))
     extra_css = merger.render()
+    app_hash = hashlib.md5((OUT / "app.js").read_bytes()).hexdigest()[:10] if (OUT / "app.js").exists() else "0"
 
 
     block = "".join(template(n, p) for n, p in frags)
-    script = '<script src="app.js" defer></script>'
+    script = '<script src="app.js?v=%s" defer></script>' % app_hash
     if "</body>" in html:
         html = html.replace("</body>", block + script + "</body>")
     else:
@@ -185,6 +188,7 @@ def main() -> None:
     shipped = "\n".join([inline_css, extra_css] + [(SRC / css).read_text() for css in STYLESHEETS])
     derived_css, _skipped = derived.synthesize(unstyled_classes(html, shipped), knowledge)
     extra_css = extra_css + "\n" + derived_css
+    html = html.replace("EXTRAHASH", hashlib.md5(extra_css.encode()).hexdigest()[:10])
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "index.html").write_text(html)
 
