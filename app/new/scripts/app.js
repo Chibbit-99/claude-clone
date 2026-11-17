@@ -177,97 +177,99 @@
     items: [],
     current: null,
     timer: 0,
+    bound: false,
+
     reset() {
-      clearTimeout(this.timer);
-      this.items.forEach((it) => {
-        if (it.panel && it.panel.parentNode) it.panel.remove();
-        if (it.row) {
-          it.row.removeAttribute("data-submenu-open");
-          it.row.setAttribute("aria-expanded", "false");
-        }
-        it.panel = null;
-      });
+      this.items.forEach((it) => this.hideItem(it));
       this.items = [];
       this.current = null;
     },
-    /* remove any open panels but keep the registrations (used on close, so a
-       menu that finishes building afterwards is not left unregistered) */
+
+    /* remove every open panel but keep the registrations */
     hideAll() {
-      clearTimeout(this.timer);
-      this.items.forEach((it) => {
-        if (it.panel && it.panel.parentNode) it.panel.remove();
-        it.panel = null;
-        if (it.row) {
-          it.row.removeAttribute("data-submenu-open");
-          it.row.setAttribute("aria-expanded", "false");
-        }
-      });
+      this.items.forEach((it) => this.hideItem(it));
       this.current = null;
     },
+
     register(row, build, opts) {
       const settings = opts || {};
       const item = { row, build, panel: null, click: !!settings.click };
       this.items.push(item);
-      row.addEventListener("mouseenter", () => {
-        clearTimeout(this.timer);
-        this.show(item);
-      });
+      this.bindDelegation();
       if (item.click) {
-        /* click-driven submenu: a toggle, and it must not vanish on mouseleave */
         row.setAttribute("aria-haspopup", "menu");
         row.setAttribute("aria-expanded", "false");
-        item.clickDriven = true;
         row.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (item.panel) this.hideItem(item);
-          else this.show(item);
+          e.__submenuHandled = true;
+          /* click only ever opens: a click while hovering must not close it */
+          if (!item.panel) this.show(item);
         });
-      } else {
-        row.addEventListener("mouseleave", () => this.schedule(140));
       }
       return item;
     },
-    hideItem(item) {
-      if (item.panel && item.panel.parentNode) item.panel.remove();
-      item.panel = null;
-      item.row.removeAttribute("data-submenu-open");
-      item.row.setAttribute("aria-expanded", "false");
-      if (this.current === item) this.current = null;
-    },
-    /* dismiss immediately when the pointer enters a plain sibling row */
-    watchSiblings(menuRoot) {
+
+    /* One document-level watcher pair, installed once. Hover and dismiss are
+       decided from the live pointer position, so they cannot drift out of sync
+       with the DOM the way per-element enter/leave timers can. */
+    bindDelegation() {
+      if (this.bound) return;
+      this.bound = true;
       const self = this;
-      $$(".menu-item, .model-nav-row", menuRoot).forEach((row) => {
-        row.addEventListener("mouseenter", () => {
-          const isTrigger = self.items.some((it) => it.row === row);
-          if (isTrigger) return;
-          if (!self.current) return;
-          self.schedule(80);
-        });
-      });
+      const triggerFor = (target) => {
+        if (!target || !target.closest) return null;
+        const row = target.closest(".model-nav-row, .menu-item");
+        return row ? self.items.find((it) => it.row === row) || null : null;
+      };
+
+      document.addEventListener(
+        "pointerover",
+        (e) => {
+          const item = triggerFor(e.target);
+          if (item) self.show(item);
+        },
+        true
+      );
+
+      document.addEventListener(
+        "pointermove",
+        (e) => {
+          if (!self.items.some((it) => it.panel)) return;
+          const onRow = self.items.some((it) => it.row.contains(e.target));
+          const onPanel = self.items.some((it) => it.panel && it.panel.contains(e.target));
+          if (onRow || onPanel) return;
+          self.hideAll();
+        },
+        true
+      );
+
+      document.addEventListener(
+        "click",
+        (e) => {
+          const item = triggerFor(e.target);
+          if (!item || !item.clickDriven) return;
+          if (e.__submenuHandled) return;
+          e.preventDefault();
+          if (!item.panel) self.show(item);
+        },
+        true
+      );
     },
+
     show(item) {
       if (this.current === item && item.panel) return;
-      /* only one submenu at a time */
       this.items.forEach((it) => {
-        if (it === item) return;
-        if (it.panel && it.panel.parentNode) it.panel.remove();
-        it.panel = null;
-        it.row.removeAttribute("data-submenu-open");
-        it.row.setAttribute("aria-expanded", "false");
+        if (it !== item) this.hideItem(it);
       });
       if (!item.panel) {
         item.panel = item.build();
         item.panel.classList.add("menu--submenu");
         item.panel.style.position = "absolute";
         item.panel.style.pointerEvents = "auto";
-        $(".portal-shell")?.appendChild(item.panel) ||
-          $("#portal-root").firstChild.appendChild(item.panel);
-        item.panel.addEventListener("mouseenter", () => clearTimeout(this.timer));
-        item.panel.addEventListener("mouseleave", () => this.schedule(140));
+        const host = $(".portal-shell") || $("#portal-root").firstChild;
+        if (host) host.appendChild(item.panel);
       }
-      /* anchor: right of the row, top-aligned but kept inside the viewport */
       const r = item.row.getBoundingClientRect();
       const m = item.panel.getBoundingClientRect();
       let left = r.right + 8;
@@ -280,24 +282,15 @@
       item.row.setAttribute("aria-expanded", "true");
       this.current = item;
     },
-    schedule(delay) {
-      clearTimeout(this.timer);
-      this.timer = setTimeout(() => {
-        const hovering = this.items.some(
-          (it) =>
-            (!it.clickDriven && it.row.matches(":hover")) ||
-            (it.panel && it.panel.matches(":hover")) ||
-            (it.clickDriven && it.panel)
-        );
-        if (hovering) return;
-        this.items.forEach((it) => {
-          if (it.panel && it.panel.parentNode) it.panel.remove();
-          it.panel = null;
-          it.row.removeAttribute("data-submenu-open");
-          it.row.setAttribute("aria-expanded", "false");
-        });
-        this.current = null;
-      }, delay === undefined ? 140 : delay);
+
+    hideItem(item) {
+      if (item.panel && item.panel.parentNode) item.panel.remove();
+      item.panel = null;
+      if (item.row) {
+        item.row.removeAttribute("data-submenu-open");
+        item.row.setAttribute("aria-expanded", "false");
+      }
+      if (this.current === item) this.current = null;
     }
   };
 
@@ -430,7 +423,6 @@
       });
     });
 
-    Submenus.watchSiblings(menu);
     Menus.openMenu(addButton, menu, { offset: -7 });
   });
 
@@ -650,7 +642,6 @@
     Submenus.register(effortRow, buildEffortMenu, { click: true });
     Submenus.register(moreRow, buildMoreModels, { click: true });
 
-    Submenus.watchSiblings(menu);
     Menus.openMenu(modelButton, menu, { offset: -7, alignEnd: true, nudgeX: 8, ignoreClamp: true });
   });
 
