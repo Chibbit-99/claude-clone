@@ -204,15 +204,36 @@
       });
       this.current = null;
     },
-    register(row, build) {
-      const item = { row, build, panel: null };
+    register(row, build, opts) {
+      const settings = opts || {};
+      const item = { row, build, panel: null, click: !!settings.click };
       this.items.push(item);
       row.addEventListener("mouseenter", () => {
         clearTimeout(this.timer);
         this.show(item);
       });
-      row.addEventListener("mouseleave", () => this.schedule(140));
+      if (item.click) {
+        /* click-driven submenu: a toggle, and it must not vanish on mouseleave */
+        row.setAttribute("aria-haspopup", "menu");
+        row.setAttribute("aria-expanded", "false");
+        item.clickDriven = true;
+        row.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (item.panel) this.hideItem(item);
+          else this.show(item);
+        });
+      } else {
+        row.addEventListener("mouseleave", () => this.schedule(140));
+      }
       return item;
+    },
+    hideItem(item) {
+      if (item.panel && item.panel.parentNode) item.panel.remove();
+      item.panel = null;
+      item.row.removeAttribute("data-submenu-open");
+      item.row.setAttribute("aria-expanded", "false");
+      if (this.current === item) this.current = null;
     },
     /* dismiss immediately when the pointer enters a plain sibling row */
     watchSiblings(menuRoot) {
@@ -263,7 +284,10 @@
       clearTimeout(this.timer);
       this.timer = setTimeout(() => {
         const hovering = this.items.some(
-          (it) => it.row.matches(":hover") || (it.panel && it.panel.matches(":hover"))
+          (it) =>
+            (!it.clickDriven && it.row.matches(":hover")) ||
+            (it.panel && it.panel.matches(":hover")) ||
+            (it.clickDriven && it.panel)
         );
         if (hovering) return;
         this.items.forEach((it) => {
@@ -359,7 +383,7 @@
       "Add to project": {
         width: 292,
         items: [
-          { label: "New project", icon: "\ue001" },
+          { label: "New project", icon: "\ue001", action: "new-project" },
           { label: "SC Drawer", icon: "\ue0c9" },
           { label: "Chibbit", icon: "\ue0c9" }
         ]
@@ -393,7 +417,13 @@
       if (!spec) return;
       Submenus.register(row, () => {
         const subMenu = buildMenu(
-          spec.items.map((it) => menuRow({ label: it.label, icon: it.icon }))
+          spec.items.map((it) =>
+            menuRow({
+              label: it.label,
+              icon: it.icon,
+              onClick: it.action === "new-project" ? () => { Menus.close(); buildNewProjectDialog(); } : undefined
+            })
+          )
         );
         subMenu.style.width = spec.width + "px";
         return subMenu;
@@ -616,8 +646,9 @@
       return panel;
     };
 
-    Submenus.register(effortRow, buildEffortMenu);
-    Submenus.register(moreRow, buildMoreModels);
+    /* both open on hover and toggle on click, so a click always works */
+    Submenus.register(effortRow, buildEffortMenu, { click: true });
+    Submenus.register(moreRow, buildMoreModels, { click: true });
 
     Submenus.watchSiblings(menu);
     Menus.openMenu(modelButton, menu, { offset: -7, alignEnd: true, nudgeX: 8, ignoreClamp: true });
@@ -698,6 +729,103 @@
       Menus.openMenu(chip, menu, { offset: 0, x: col.left, y: col.bottom + 40 });
     });
   });
+
+  /* --------------------------------------------------------------- dialogs */
+  /* Shared modal shell: overlay + panel, Escape / backdrop / [data-close]. */
+  const openModal = (modal, opts) => {
+    const options = opts || {};
+    const overlay = el("div", "modal-overlay");
+    if (options.className) overlay.classList.add(options.className);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("is-open"));
+
+    const close = () => {
+      if (!document.body.contains(overlay)) return;
+      overlay.classList.remove("is-open");
+      setTimeout(() => overlay.remove(), 150);
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay || e.target.closest("[data-close]")) close();
+    });
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    const observer = new MutationObserver(() => {
+      if (!document.body.contains(overlay)) {
+        document.removeEventListener("keydown", onKey);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true });
+    return { overlay, close };
+  };
+
+  /* ------------------------------------------------------ create-a-project */
+  const buildNewProjectDialog = () => {
+    const modal = el("div", "dialog dialog--project");
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-labelledby", "new-project-title");
+
+    const head = el("div", "dialog-head");
+    const title = el("h2", "dialog-title");
+    title.id = "new-project-title";
+    title.textContent = "Create a project";
+    head.appendChild(title);
+    const closeX = el("button", "dialog-close");
+    closeX.type = "button";
+    closeX.setAttribute("aria-label", "Close");
+    closeX.setAttribute("data-close", "");
+    closeX.appendChild(icon("\ue10f", "calc(1.25rem * var(--cds-rem-scale, 1))"));
+    head.appendChild(closeX);
+    modal.appendChild(head);
+
+    const body = el("div", "dialog-body");
+
+    const nameLabel = el("label", "dialog-label");
+    nameLabel.setAttribute("for", "project-name");
+    nameLabel.textContent = "What are you working on?";
+    body.appendChild(nameLabel);
+    const nameInput = el("input", "dialog-input");
+    nameInput.id = "project-name";
+    nameInput.type = "text";
+    nameInput.placeholder = "Name your project";
+    body.appendChild(nameInput);
+
+    const goalLabel = el("label", "dialog-label");
+    goalLabel.setAttribute("for", "project-goal");
+    goalLabel.textContent = "What are you trying to achieve?";
+    body.appendChild(goalLabel);
+    const goalInput = el("textarea", "dialog-textarea");
+    goalInput.id = "project-goal";
+    goalInput.placeholder = "Describe your project, goals, subject, etc...";
+    goalInput.rows = 3;
+    body.appendChild(goalInput);
+
+    modal.appendChild(body);
+
+    const actions = el("div", "dialog-actions");
+    const cancel = el("button", "btn-ghost");
+    cancel.type = "button";
+    cancel.setAttribute("data-close", "");
+    cancel.textContent = "Cancel";
+    const create = el("button", "btn-solid");
+    create.type = "button";
+    create.textContent = "Create project";
+    actions.appendChild(cancel);
+    actions.appendChild(create);
+    modal.appendChild(actions);
+
+    const popup = openModal(modal);
+    create.addEventListener("click", () => popup.close());
+    setTimeout(() => nameInput.focus(), 60);
+    return popup;
+  };
 
   /* ------------------------------------------------------------ cowork sheet */
   const coworkOption = $('.segmented-option[data-value="cowork"]');
